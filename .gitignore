@@ -10,6 +10,9 @@
 bin/
 obj/
 
+#test files
+test*
+
 ### Windows ###
 # Windows thumbnail cache files
 Thumbs.db

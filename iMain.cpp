@@ -1,43 +1,112 @@
 # include "iGraphics.h"
-
-int x = 0, y = 0, r = 15;
-
-typedef struct {
-    double x, y;
-} Point2D;
+#include "mathlib.h"
 
 const int OUTLINE_MAX_NUM_OF_POINTS = 10;
 typedef struct {
     Point2D convex_polygon_points[OUTLINE_MAX_NUM_OF_POINTS];
     int number_of_points;
+    Point2D origin, broad_max, broad_min; // left_bottom corner (base)
 } Outline;
 
+/// Draw Outline
 void Outline_Draw(const Outline* outline) {
     int size = outline->number_of_points, i;
     double x[size], y[size];
 
     for(i=0; i<size; i++) {
-        x[i] = outline->convex_polygon_points[i].x;
-        y[i] = outline->convex_polygon_points[i].y;
+        x[i] = outline->convex_polygon_points[i].x + outline->origin.x;
+        y[i] = outline->convex_polygon_points[i].y + outline->origin.y;
     }
 
-    iFilledPolygon(x, y, size);
+    iPolygon(x, y, size);
+    iPoint(outline->broad_max.x, outline->broad_max.y, 3);
+    iPoint(outline->broad_min.x, outline->broad_min.y, 3);
 }
 
-void Outline_Creator(Outline* outline, Point2D points[], int array_size) {
-    int i;
+/// Calculate Broad Phase for collusion detection
+const double MAX_ORIGIN = 1e100;
+void Outline_calculate_broad_phase(Outline* outline) {
+    outline->broad_min = {MAX_ORIGIN, MAX_ORIGIN};
+    outline->broad_max = {-MAX_ORIGIN, -MAX_ORIGIN};
 
+    int i;
+    for(i=0; i<outline->number_of_points; i++) {
+        if (outline->broad_max.x < outline->convex_polygon_points[i].x) outline->broad_max.x = outline->convex_polygon_points[i].x;
+        if (outline->broad_max.y < outline->convex_polygon_points[i].y) outline->broad_max.y = outline->convex_polygon_points[i].y;
+
+        if (outline->broad_min.x > outline->convex_polygon_points[i].x) outline->broad_min.x = outline->convex_polygon_points[i].x;
+        if (outline->broad_min.y > outline->convex_polygon_points[i].y) outline->broad_min.y = outline->convex_polygon_points[i].y;
+    }
+
+    outline->broad_min.x += outline->origin.x;
+    outline->broad_max.x += outline->origin.x;
+
+    outline->broad_min.y += outline->origin.y;
+    outline->broad_max.y += outline->origin.y;
+}
+
+/// New Outline Creator with with array of corner Points
+void Outline_Creator(Outline* outline, Point2D points[], int array_size) {
+    outline->origin = {0, 0};
+
+    if(array_size > OUTLINE_MAX_NUM_OF_POINTS) {
+        printf("Error, OUTLINE_MAX_NUM_OF_POINTS exceeded");
+        outline->number_of_points = 0;
+        return;
+    }
+
+    int i;
     outline->number_of_points = array_size;
+
     for(i=0; i<array_size; i++) {
         outline->convex_polygon_points[i] = points[i];
     }
+
+    Outline_calculate_broad_phase(outline);
 }
 
-typedef struct {
+void Outline_set_Origin(Outline* outline, double x, double y) {
+    outline->origin = {x, y};
+    Outline_calculate_broad_phase(outline);
+}
 
-} CollisionData;
+void Outline_increase_origin(Outline* outline, double dx, double dy) {
+    outline->origin.x += dx;
+    outline->origin.y += dy;
 
-Outline box;
+    outline->broad_min.x += dx;
+    outline->broad_max.x += dx;
+
+    outline->broad_min.y += dy;
+    outline->broad_max.y += dy;
+}
+
+inline int within(double minimum, double maximum, double check) {
+    printf("%f %f -- %f :: %d\n", minimum, maximum, check, minimum<=check && check<=maximum);
+    return minimum<=check && check<=maximum;
+}
+
+inline int point_within(Point2D bottomleft, Point2D topright, double x, double y) {
+
+    return within(bottomleft.x, topright.x, x) && within(bottomleft.y, topright.y, y);
+}
+
+inline int rect_within(Point2D bottomleft, Point2D topright, Point2D checkbottomleft, Point2D checktopright) {
+    return  point_within(bottomleft, topright, checkbottomleft.x, checkbottomleft.y) ||
+            point_within(bottomleft, topright, checktopright.x, checktopright.y) ||
+            point_within(bottomleft, topright, checkbottomleft.x, checktopright.y) ||
+            point_within(bottomleft, topright, checktopright.x, checkbottomleft.y);
+}
+
+int Outline_collision_check (const Outline* ls, const Outline* rs) {
+    /// Broad Phase
+    if(! (  rect_within(ls->broad_min, ls->broad_max, rs->broad_min, rs->broad_max) ||
+            rect_within(rs->broad_min, rs->broad_max, ls->broad_min, ls->broad_max) )) return FALSE;
+
+    return TRUE;
+}
+
+Outline box, pentagon;
 
 
 /*
@@ -49,6 +118,7 @@ void iDraw()
     iClear();
     iSetColor(20,200,255);
     Outline_Draw(&box);
+    Outline_Draw(&pentagon);
 }
 
 /*
@@ -71,15 +141,12 @@ void iMouse(int button, int state, int mx, int my)
     {
         //place your codes here
         //printf("x = %d, y= %d\n",mx,my);
-        x += 5;
-        y += 5;
-
+        Outline_increase_origin(&box, 10, 10);
     }
     if(button == GLUT_RIGHT_BUTTON && state == GLUT_DOWN)
     {
         //place your codes here
-        x -= 5;
-        y -= 5;
+        Outline_increase_origin(&box, -10, -10);
     }
 }
 
@@ -93,6 +160,21 @@ void iKeyboard(unsigned char key)
     {
         exit(0);
     }
+    else if(key == 'a') {
+        Outline_increase_origin(&box, -10, 0);
+    }
+    else if(key == 'd') {
+        Outline_increase_origin(&box, +10, 0);
+    }
+    else if(key == 's') {
+        Outline_increase_origin(&box, 0, -10);
+    }
+    else if(key == 'w') {
+        Outline_increase_origin(&box, 0, +10);
+    }
+
+    printf("Collide : %d\n", Outline_collision_check(&box, &pentagon));
+
     //place your codes for other keys here
 }
 
@@ -119,8 +201,13 @@ void iSpecialKeyboard(unsigned char key)
 int main()
 {
     //place your own initialization codes here.
-    Point2D points[] = {{0, 0}, {100, 0}, {100, 70}, {40, 100}, {30, 50}, {20, 45}, {10, 100} };
-    Outline_Creator(&box, points, 7);
+    Point2D points_[] = {{0, 0}, {100, 0}, {100, 100}, {0, 100}};
+    Outline_Creator(&box, points_, 4);
+
+
+    Point2D points[] = {{0, 0}, {50, 0}, {70, 40}, {40, 70}, {0, 70}};
+    Outline_Creator(&pentagon, points, 5);
+    Outline_set_Origin(&pentagon, 300, 300);
 
 
     iInitialize(400, 400, "iGameEngine");
