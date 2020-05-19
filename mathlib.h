@@ -29,5 +29,6 @@ static inline double length(Vector2D vct)                           { return sqr
 
 static inline double projection(Vector2D direction, Vector2D of)    { return dot(direction, of)/length(direction); }
 static inline Vector2D unit(Vector2D vct)                           { return mul(vct, 1/length(vct)); }
+static inline Vector2D normal(Vector2D vct)                         { return (Vector2D) {vct.y, -vct.x}; }
 
 static inline double angle_radian(Vector2D ls, Vector2D rs)         { return acos(dot(ls, rs)/(length(ls)*length(rs))); }

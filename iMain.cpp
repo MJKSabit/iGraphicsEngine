@@ -5,7 +5,11 @@ const int OUTLINE_MAX_NUM_OF_POINTS = 10;
 typedef struct {
     Point2D convex_polygon_points[OUTLINE_MAX_NUM_OF_POINTS];
     int number_of_points;
-    Point2D origin, broad_max, broad_min; // left_bottom corner (base)
+    Point2D origin; // left_bottom corner (base)
+    Point2D broad_max, broad_min; // Broad Phase data, change on rotate, origin change (absolute not relative)
+
+    Vector2D normal_to_edge[OUTLINE_MAX_NUM_OF_POINTS];
+
 } Outline;
 
 /// Draw Outline
@@ -45,10 +49,26 @@ void Outline_calculate_broad_phase(Outline* outline) {
     outline->broad_max.y += outline->origin.y;
 }
 
+/// Calculate Narrow Phase Normal Vectors
+void Outline_calculate_narrow_phase(Outline* outline) {
+    if(outline->number_of_points>0) {
+        outline->normal_to_edge[0] = normal(vector2D_p(outline->convex_polygon_points[outline->number_of_points-1], outline->convex_polygon_points[0]));
+    }
+
+    int i;
+    for(i=1; i<outline->number_of_points; i++) {
+        outline->normal_to_edge[i] = normal(vector2D_p(outline->convex_polygon_points[i-1], outline->convex_polygon_points[i]));
+    }
+}
+
+
+void Outline_set_Origin(Outline* outline, double x, double y) {
+    outline->origin = {x, y};
+    Outline_calculate_broad_phase(outline);
+}
+
 /// New Outline Creator with with array of corner Points
 void Outline_Creator(Outline* outline, Point2D points[], int array_size) {
-    outline->origin = {0, 0};
-
     if(array_size > OUTLINE_MAX_NUM_OF_POINTS) {
         printf("Error, OUTLINE_MAX_NUM_OF_POINTS exceeded");
         outline->number_of_points = 0;
@@ -62,12 +82,8 @@ void Outline_Creator(Outline* outline, Point2D points[], int array_size) {
         outline->convex_polygon_points[i] = points[i];
     }
 
-    Outline_calculate_broad_phase(outline);
-}
-
-void Outline_set_Origin(Outline* outline, double x, double y) {
-    outline->origin = {x, y};
-    Outline_calculate_broad_phase(outline);
+    Outline_set_Origin(outline, 0.0, 0.0);
+    Outline_calculate_narrow_phase(outline);
 }
 
 void Outline_increase_origin(Outline* outline, double dx, double dy) {
@@ -82,7 +98,7 @@ void Outline_increase_origin(Outline* outline, double dx, double dy) {
 }
 
 inline int within(double minimum, double maximum, double check) {
-    printf("%f %f -- %f :: %d\n", minimum, maximum, check, minimum<=check && check<=maximum);
+    // printf("%f %f -- %f :: %d\n", minimum, maximum, check, minimum<=check && check<=maximum);
     return minimum<=check && check<=maximum;
 }
 
@@ -98,12 +114,52 @@ inline int rect_within(Point2D bottomleft, Point2D topright, Point2D checkbottom
             point_within(bottomleft, topright, checktopright.x, checkbottomleft.y);
 }
 
-int Outline_collision_check (const Outline* ls, const Outline* rs) {
-    /// Broad Phase
-    if(! (  rect_within(ls->broad_min, ls->broad_max, rs->broad_min, rs->broad_max) ||
-            rect_within(rs->broad_min, rs->broad_max, ls->broad_min, ls->broad_max) )) return FALSE;
+int Outline_collision_check_broad_phase(const Outline* ls, const Outline* rs) {
+    return  rect_within(ls->broad_min, ls->broad_max, rs->broad_min, rs->broad_max) ||
+            rect_within(rs->broad_min, rs->broad_max, ls->broad_min, ls->broad_max) ;
+}
+
+////////////////////////////
+/// DEBUG
+////////////////////////////
+int Outline_collision_check_narrow_phase(const Outline* ls, const Outline* rs) {
+    /// Objective is to find projection divided on both side....
+
+    Vector2D point_to_be_compared, point_base, other_vector; // from origin
+    double distance_left, distance_center, distance_right;
+
+    int i, j, sat_found = FALSE;
+    for(i=0; i<ls->number_of_points; i++) {
+        point_to_be_compared = vector2D_p_origin(ls->convex_polygon_points[(i+1)%ls->number_of_points]); // without two endpoints
+        point_base = vector2D_p_origin(ls->convex_polygon_points[i]);
+
+        distance_left = dot(point_to_be_compared, ls->normal_to_edge[i]);
+        distance_center = dot(point_base, ls->normal_to_edge[i]); /// projection * len(normal_to_edge[i]
+
+        //double len = length(ls->normal_to_edge[i]);
+        //printf("DISTANCE LEFT: %.2f \t DISTANCE CENTER: %.2f\n", distance_left/len, distance_center/len);
+        printf("%.2fi + %.2fj\t%.2fi + %.2fj\n", point_to_be_compared.x, point_to_be_compared.y, point_base.x, point_base.y);
+
+
+        for (j=0; j<rs->number_of_points; j++) {
+            other_vector = vector2D_p_origin(rs->convex_polygon_points[j]);
+            distance_right = dot(other_vector, ls->normal_to_edge[i]);
+
+            if( (distance_center-distance_left)*(distance_center-distance_right) > 0 ) break; /// Same side, sign says
+        }
+
+        if(j == rs->number_of_points) return FALSE; /// Separated Axis Found, no collusion
+    }
 
     return TRUE;
+}
+
+int Outline_collision_check (const Outline* ls, const Outline* rs) {
+    /// If do not pass broad phase, no need to check narrow phase
+    if(!Outline_collision_check_broad_phase(ls, rs)) return FALSE;
+
+    /// Check for each line, using Separating Axis Theorem
+    return Outline_collision_check_narrow_phase(ls, rs);
 }
 
 Outline box, pentagon;
@@ -201,7 +257,7 @@ void iSpecialKeyboard(unsigned char key)
 int main()
 {
     //place your own initialization codes here.
-    Point2D points_[] = {{0, 0}, {100, 0}, {100, 100}, {0, 100}};
+    Point2D points_[] = {{0, 0}, {100, 10}, {100, 110}, {10, 100}};
     Outline_Creator(&box, points_, 4);
 
 
