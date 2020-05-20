@@ -59,6 +59,11 @@ void Outline_calculate_narrow_phase(Outline* outline) {
     for(i=1; i<outline->number_of_points; i++) {
         outline->normal_to_edge[i] = normal(vector2D_p(outline->convex_polygon_points[i-1], outline->convex_polygon_points[i]));
     }
+
+    printf("DEBUG\n");
+    for(i=0; i<outline->number_of_points; i++) {
+        printf("%d\t%.2f\ti +\t%.2f\tj\n", i, outline->normal_to_edge[i].x, outline->normal_to_edge[i].y);
+    }
 }
 
 
@@ -121,34 +126,41 @@ int Outline_collision_check_broad_phase(const Outline* ls, const Outline* rs) {
 
 ////////////////////////////
 /// DEBUG
+void print_vector(Vector2D vct) {
+    printf("%.2fi\t+ %.2fj\n", vct.x, vct.y);
+}
+
+
 ////////////////////////////
-int Outline_collision_check_narrow_phase(const Outline* ls, const Outline* rs) {
+int Outline_collision_check_narrow_phase(const Outline* const ls, const Outline* const rs) {
     /// Objective is to find projection divided on both side....
 
-    Vector2D point_to_be_compared, point_base, other_vector; // from origin
-    double distance_left, distance_center, distance_right;
+    Vector2D edge_vector_self, edge_vector_other; // from origin
+    double distance_left, distance_right;
 
     int i, j, sat_found = FALSE;
     for(i=0; i<ls->number_of_points; i++) {
-        point_to_be_compared = vector2D_p_origin(ls->convex_polygon_points[(i+1)%ls->number_of_points]); // without two endpoints
-        point_base = vector2D_p_origin(ls->convex_polygon_points[i]);
+        edge_vector_self = vector2D_p(ls->convex_polygon_points[i], ls->convex_polygon_points[(i+1)%ls->number_of_points]);
+        distance_left = projection(ls->normal_to_edge[i], edge_vector_self);
 
-        distance_left = dot(point_to_be_compared, ls->normal_to_edge[i]);
-        distance_center = dot(point_base, ls->normal_to_edge[i]); /// projection * len(normal_to_edge[i]
-
-        //double len = length(ls->normal_to_edge[i]);
-        //printf("DISTANCE LEFT: %.2f \t DISTANCE CENTER: %.2f\n", distance_left/len, distance_center/len);
-        printf("%.2fi + %.2fj\t%.2fi + %.2fj\n", point_to_be_compared.x, point_to_be_compared.y, point_base.x, point_base.y);
-
+        printf("DEBUG\n");
+        print_vector(ls->normal_to_edge[i]);
+        print_vector(edge_vector_self);
 
         for (j=0; j<rs->number_of_points; j++) {
-            other_vector = vector2D_p_origin(rs->convex_polygon_points[j]);
-            distance_right = dot(other_vector, ls->normal_to_edge[i]);
+            edge_vector_other = vector2D_p(ls->convex_polygon_points[i], rs->convex_polygon_points[j]);
+            distance_right = projection(ls->normal_to_edge[i], edge_vector_other);
 
-            if( (distance_center-distance_left)*(distance_center-distance_right) > 0 ) break; /// Same side, sign says
+            //printf("%.2f\t%.2f\n", distance_left, distance_right);
+            print_vector(edge_vector_other);
+            if( distance_left*distance_right > 0 ) break; /// Same side, sign says
         }
 
-        if(j == rs->number_of_points) return FALSE; /// Separated Axis Found, no collusion
+        if(j == rs->number_of_points) {
+            printf("FALSE at %d\t%.2fi + %.2fj\n", i, ls->normal_to_edge[i].x, ls->normal_to_edge[i].y);
+
+            return FALSE; /// Separated Axis Found, no collusion
+        }
     }
 
     return TRUE;
@@ -159,7 +171,7 @@ int Outline_collision_check (const Outline* ls, const Outline* rs) {
     if(!Outline_collision_check_broad_phase(ls, rs)) return FALSE;
 
     /// Check for each line, using Separating Axis Theorem
-    return Outline_collision_check_narrow_phase(ls, rs);
+    return Outline_collision_check_narrow_phase(ls, rs) && Outline_collision_check_narrow_phase(rs, ls);
 }
 
 Outline box, pentagon;
