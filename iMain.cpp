@@ -21,8 +21,6 @@ void Outline_Draw(const Outline* outline) {
     }
 
     iPolygon(x, y, size);
-    iPoint(outline->broad_max.x, outline->broad_max.y, 3);
-    iPoint(outline->broad_min.x, outline->broad_min.y, 3);
 }
 
 /// Calculate Broad Phase for collusion detection
@@ -145,7 +143,7 @@ int Outline_collision_check (const Outline* ls, const Outline* rs) {
     return Outline_collision_check_narrow_phase(ls, rs) && Outline_collision_check_narrow_phase(rs, ls);
 }
 
-Outline box, pentagon;
+Outline box, pentagon, hexa;
 
 
 /*
@@ -158,6 +156,7 @@ void iDraw()
     iSetColor(20,200,255);
     Outline_Draw(&box);
     Outline_Draw(&pentagon);
+    Outline_Draw(&hexa);
 }
 
 /*
@@ -212,7 +211,7 @@ void iKeyboard(unsigned char key)
         Outline_increase_origin(&box, 0, +10);
     }
 
-    printf("Collide : %d\n", Outline_collision_check(&box, &pentagon));
+    printf("Collide : %d\n", Outline_collision_check(&box, &pentagon) || Outline_collision_check(&box, &hexa));
 
     //place your codes for other keys here
 }
@@ -247,6 +246,10 @@ int main()
     Point2D points[] = {{0, 0}, {50, 0}, {70, 40}, {40, 70}, {0, 70}};
     Outline_Creator(&pentagon, points, 5);
     Outline_set_Origin(&pentagon, 300, 300);
+
+    Point2D points_hexa[] = { {40, 0}, {100, 0}, {140, 50}, {100, 100}, {40, 100}, {0, 50} };
+    Outline_Creator(&hexa, points_hexa, 6);
+    Outline_set_Origin(&hexa, 150, 0);
 
 
     iInitialize(400, 400, "iGameEngine");
