@@ -8,8 +8,6 @@ typedef struct {
     Point2D origin; // left_bottom corner (base)
     Point2D broad_max, broad_min; // Broad Phase data, change on rotate, origin change (absolute not relative)
 
-    Vector2D normal_to_edge[OUTLINE_MAX_NUM_OF_POINTS];
-
 } Outline;
 
 /// Draw Outline
@@ -49,24 +47,6 @@ void Outline_calculate_broad_phase(Outline* outline) {
     outline->broad_max.y += outline->origin.y;
 }
 
-/// Calculate Narrow Phase Normal Vectors
-void Outline_calculate_narrow_phase(Outline* outline) {
-    if(outline->number_of_points>0) {
-        outline->normal_to_edge[0] = normal(vector2D_p(outline->convex_polygon_points[outline->number_of_points-1], outline->convex_polygon_points[0]));
-    }
-
-    int i;
-    for(i=1; i<outline->number_of_points; i++) {
-        outline->normal_to_edge[i] = normal(vector2D_p(outline->convex_polygon_points[i-1], outline->convex_polygon_points[i]));
-    }
-
-    printf("DEBUG\n");
-    for(i=0; i<outline->number_of_points; i++) {
-        printf("%d\t%.2f\ti +\t%.2f\tj\n", i, outline->normal_to_edge[i].x, outline->normal_to_edge[i].y);
-    }
-}
-
-
 void Outline_set_Origin(Outline* outline, double x, double y) {
     outline->origin = {x, y};
     Outline_calculate_broad_phase(outline);
@@ -88,7 +68,6 @@ void Outline_Creator(Outline* outline, Point2D points[], int array_size) {
     }
 
     Outline_set_Origin(outline, 0.0, 0.0);
-    Outline_calculate_narrow_phase(outline);
 }
 
 void Outline_increase_origin(Outline* outline, double dx, double dy) {
@@ -129,9 +108,6 @@ int Outline_collision_check_broad_phase(const Outline* ls, const Outline* rs) {
             rect_within(rs->broad_min, rs->broad_max, ls->broad_min, ls->broad_max) ;
 }
 
-////////////////////////////
-/// DEBUG
-////////////////////////////
 int Outline_collision_check_narrow_phase(const Outline* const ls, const Outline* const rs) {
     /// Objective is to find projection divided on both side....
 
