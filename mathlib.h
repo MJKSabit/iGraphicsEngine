@@ -6,6 +6,8 @@ typedef struct {
     double x, y;
 } Point2D;
 
+static inline double cycle(Point2D a, Point2D b, Point2D c)         { return a.x*b.y+b.x*c.y+c.x*a.y - (a.y*b.x+b.y*c.x+c.y*a.x); }
+
 static inline double radian(double degree)                          { return PI*degree/180; }
 static inline double degree(double radian)                          { return radian*180/PI; }
 

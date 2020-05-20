@@ -102,6 +102,11 @@ void Outline_increase_origin(Outline* outline, double dx, double dy) {
     outline->broad_max.y += dy;
 }
 
+Point2D Outline_get_point(const Outline* outline, int index) {
+    return (Point2D) {  outline->convex_polygon_points[index].x+outline->origin.x,
+                        outline->convex_polygon_points[index].y+outline->origin.y   };
+}
+
 inline int within(double minimum, double maximum, double check) {
     // printf("%f %f -- %f :: %d\n", minimum, maximum, check, minimum<=check && check<=maximum);
     return minimum<=check && check<=maximum;
@@ -126,39 +131,29 @@ int Outline_collision_check_broad_phase(const Outline* ls, const Outline* rs) {
 
 ////////////////////////////
 /// DEBUG
-void print_vector(Vector2D vct) {
-    printf("%.2fi\t+ %.2fj\n", vct.x, vct.y);
-}
-
-
 ////////////////////////////
 int Outline_collision_check_narrow_phase(const Outline* const ls, const Outline* const rs) {
     /// Objective is to find projection divided on both side....
 
-    Vector2D edge_vector_self, edge_vector_other; // from origin
-    double distance_left, distance_right;
+    Point2D base_left, base_right, point_this, point_other;
+    double cycle_this, cycle_other;
 
     int i, j, sat_found = FALSE;
     for(i=0; i<ls->number_of_points; i++) {
-        edge_vector_self = vector2D_p(ls->convex_polygon_points[i], ls->convex_polygon_points[(i+1)%ls->number_of_points]);
-        distance_left = projection(ls->normal_to_edge[i], edge_vector_self);
 
-        printf("DEBUG\n");
-        print_vector(ls->normal_to_edge[i]);
-        print_vector(edge_vector_self);
+        base_left = Outline_get_point(ls, i);
+        base_right = Outline_get_point(ls, (i+1)%(ls->number_of_points)); // Cycle for Max==0
+        point_this = Outline_get_point(ls, (i+2)%(ls->number_of_points)); // without the line
+        cycle_this = cycle(base_left, base_right, point_this);
 
         for (j=0; j<rs->number_of_points; j++) {
-            edge_vector_other = vector2D_p(ls->convex_polygon_points[i], rs->convex_polygon_points[j]);
-            distance_right = projection(ls->normal_to_edge[i], edge_vector_other);
+            point_other = Outline_get_point(rs, j);
+            cycle_other = cycle(base_left, base_right, point_other);
 
-            //printf("%.2f\t%.2f\n", distance_left, distance_right);
-            print_vector(edge_vector_other);
-            if( distance_left*distance_right > 0 ) break; /// Same side, sign says
+            if( cycle_this*cycle_other > 0 || cycle_other==0.0) break; /// Same side, sign says
         }
 
         if(j == rs->number_of_points) {
-            printf("FALSE at %d\t%.2fi + %.2fj\n", i, ls->normal_to_edge[i].x, ls->normal_to_edge[i].y);
-
             return FALSE; /// Separated Axis Found, no collusion
         }
     }
